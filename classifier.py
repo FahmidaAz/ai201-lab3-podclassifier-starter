@@ -59,24 +59,32 @@ def build_few_shot_prompt(labeled_examples: list[dict], description: str) -> str
 
 
 def classify_episode(description: str, labeled_examples: list[dict]) -> dict:
-    """
-    Classify a single podcast episode description using the few-shot LLM classifier.
+    try:
+        prompt = build_few_shot_prompt(labeled_examples, description)
 
-    TODO — Milestone 2 (complete after build_few_shot_prompt):
+        response = _client.chat.completions.create(
+            model=LLM_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0,
+        )
 
-    Steps:
-      1. Call build_few_shot_prompt() to construct the prompt
-      2. Send it to the LLM via _client.chat.completions.create()
-      3. Parse the response to extract a label and reasoning
-      4. Validate the label — if it's not in VALID_LABELS, set it to "unknown"
-      5. Return a dict with "label" and "reasoning" keys
+        response_text = response.choices[0].message.content or ""
 
-    Handle the case where the LLM returns something unparseable gracefully —
-    don't let a bad response crash the whole evaluation.
+        # Parse label and reasoning
+        label = "unknown"
+        reasoning = response_text.strip()
 
-    Before writing code, complete specs/classifier-spec.md.
-    """
-    return {
-        "label": None,
-        "reasoning": "Classifier not yet implemented. Complete Milestone 2.",
-    }
+        for line in response_text.splitlines():
+            if line.lower().startswith("label:"):
+                raw = line.split(":", 1)[1].strip().lower()
+                # strip any markdown bold/italic and punctuation
+                raw = raw.strip("*_`.,")
+                if raw in VALID_LABELS:
+                    label = raw
+            elif line.lower().startswith("reasoning:"):
+                reasoning = line.split(":", 1)[1].strip()
+
+        return {"label": label, "reasoning": reasoning}
+
+    except Exception as e:
+        return {"label": "unknown", "reasoning": f"Error during classification: {e}"}
